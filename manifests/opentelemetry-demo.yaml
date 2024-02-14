@@ -1,0 +1,67 @@
+default:
+  envOverrides:
+    - name: OTEL_COLLECTOR_NAME
+      value: localhost
+opentelemetry-collector:
+  enabled: false
+jaeger:
+  enabled: false
+prometheus:
+  enabled: false
+
+components:
+  accountingService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  adService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+
+  cartService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  checkoutService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  currencyService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  emailService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  featureflagService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  frauddetectionService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  frontend:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  frontendProxy:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  loadgenerator:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  paymentService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  productCatalogService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  quoteService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  recommendationService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  shippingService:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  ffsPostgres:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"
+  kafka:
+    podAnnotations:
+      sidecar.opentelemetry.io/inject: "true"

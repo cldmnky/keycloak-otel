@@ -1,0 +1,122 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tempostack-traces-write
+rules:
+  - apiGroups:
+      - 'tempo.grafana.com'
+    resources:
+      - dev
+    resourceNames:
+      - traces
+    verbs:
+      - 'create'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tempostack-traces
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tempostack-traces-write
+subjects:
+  - kind: ServiceAccount
+    name: cluster-collector-collector
+    namespace: tracing-collector
+---
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: cluster-collector
+  namespace: tracing-collector
+spec:
+  mode: deployment
+  image: quay.io/cldmnky/otel/otel-collector:v0.88.0
+  volumeMounts:
+  - name: tls
+    mountPath: /etc/pki/otel
+    readOnly: true
+  volumes:
+  - name: tls
+    secret:
+      secretName: tracing-collector
+  config: |
+    extensions:
+      bearertokenauth:
+        filename: "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      oidc/server:
+        issuer_url: https://storage.blahonga.me:10443/realms/blahonga
+        audience: otel-collector
+        attribute: authorization
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            auth: 
+              authenticator: oidc/server
+            tls:
+              cert_file: /etc/pki/otel/tls.crt
+              key_file: /etc/pki/otel/tls.key
+          http:
+            auth: 
+              authenticator: oidc/server
+            tls:
+              cert_file: /etc/pki/otel/tls.crt
+              key_file: /etc/pki/otel/tls.key
+    connectors:
+      spanmetrics:
+        namespace: span.metrics
+        histogram:
+          explicit:
+            buckets: [100us, 1ms, 2ms, 6ms, 10ms, 100ms, 250ms]
+        dimensions:
+          - name: http.method
+            default: GET
+          - name: http.status_code
+        exemplars:
+          enabled: true
+        dimensions_cache_size: 1500
+        aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
+        metrics_flush_interval: 15s
+    processors:
+      batch:
+        send_batch_size: 1000
+        timeout: 5s
+      memory_limiter:
+        check_interval: 2s
+        limit_mib: 1800
+        spike_limit_mib: 500
+      attributes/spanname:
+        actions:
+          - key: span_name
+            from_attribute: span_name
+            action: upsert
+    exporters:
+      prometheus:
+        endpoint: '0.0.0.0:9464'
+      debug:
+      otlp:
+        endpoint: tempo-tempo-gateway.openshift-tempo-operator.svc:8090
+        tls:
+          ca_file: "/var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt"
+        auth:
+          authenticator: bearertokenauth
+        headers:
+          X-Scope-OrgID: "dev"
+
+    service:
+      extensions: [bearertokenauth, oidc/server]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: []
+          exporters: [otlp, spanmetrics]
+        logs:
+          receivers: [otlp]
+          processors: []
+          exporters: [debug]
+        metrics:
+          receivers: [otlp, spanmetrics]
+          processors: [memory_limiter,batch]
+          exporters: [prometheus]

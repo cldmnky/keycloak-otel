@@ -1,0 +1,91 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+  namespace: opentelemetry-demo
+rules:
+- apiGroups: [""]
+  resources: ["pods", "namespaces", "nodes"]
+  verbs: ["get", "watch", "list"]
+- apiGroups:
+  - config.openshift.io
+  resources:
+  - "infrastructures"
+  - "infrastructures/status"
+  verbs:
+  - "get"
+  - "watch"
+  - "list"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector
+subjects:
+- kind: ServiceAccount
+  name: opentelemetry-demo
+  namespace: opentelemetry-demo
+roleRef:
+  kind: ClusterRole
+  name: otel-collector
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: demo
+  namespace: opentelemetry-demo
+spec:
+  mode: sidecar
+  image: docker.io/otel/opentelemetry-collector-contrib:0.74.0
+  config: |
+      extensions:
+        oauth2client/client:
+          client_id: otel-client 
+          client_secret: DFKPGWSXC1TWSaBylE2JLwso2PAuumvi
+          token_url: https://storage.blahonga.me:10443/realms/blahonga/protocol/openid-connect/token
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+            http:
+      processors:
+        batch:
+          # Batching helps better compress the data and reduce the number of outgoing
+          # connections required to transmit the data.
+          # https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/batchprocessor
+        memory_limiter:
+          # Prevents out of memory situations on the collector
+          # https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor
+          check_interval: 1s
+          limit_percentage: 50
+          spike_limit_percentage: 30
+        resourcedetection:
+          # Adds information detected from the host to the traces
+          # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor
+          detectors: [openshift]
+          timeout: 2s
+        k8sattributes:
+      exporters:
+        otlp:
+          endpoint: "tracing-collector.hosted.blahonga.me:4317"
+          tls:
+            insecure: false
+            insecure_skip_verify: true
+          auth:
+            authenticator: oauth2client/client
+      service:
+        extensions: [oauth2client/client]
+        pipelines:
+          traces:
+            receivers: [otlp]
+            processors: [memory_limiter, resourcedetection, batch, k8sattributes]
+            exporters: [otlp]
+          metrics:
+            receivers: [otlp]
+            processors: [batch, resourcedetection, k8sattributes]
+            exporters: [otlp]
+          logs:
+            receivers: [otlp]
+            processors: [batch, k8sattributes, resourcedetection]
+            exporters: [otlp]
